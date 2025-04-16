@@ -57,9 +57,11 @@ df_clean['is_draw'] = df_clean['winner'] == 'draw'
 # plt.legend()
 # plt.show()
 
-sns.boxplot(x='winner', y='rating_diff', data=df_clean)
-plt.title("Rating Difference by Winner")
-plt.axhline(0, linestyle='--', color='gray')
-plt.ylabel("White Rating - Black Rating")
-plt.show()
+# Below boxplot is kind of interesting, we can see rating is not absolute, somehow even when higher rated, frequently higher rated players can lose to lower rated (even when difference is large)
+# overall this reveals upsets are common.
+# sns.boxplot(x='winner', y='rating_diff', data=df_clean)
+# plt.title("Rating Difference by Winner")
+# plt.axhline(0, linestyle='--', color='gray')
+# plt.ylabel("White Rating - Black Rating")
+# plt.show()
 
