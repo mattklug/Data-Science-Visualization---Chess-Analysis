@@ -17,7 +17,7 @@ df['game_duration_sec'] = (df['last_move_at'] - df['created_at']).dt.total_secon
 
 # print((df['game_duration_sec'] == 0).sum()) Holy crap 8548 out of our 20058 games lasted 0 seconds, I'm guessing these are because of aborting games/disconnects (they're online chess games)
 
-df_clean = df[df['game_duration_sec'] > 0] # Filtering out those instant losers
+df_clean = df[df['game_duration_sec'] > 0].copy() # Filtering out those instant losers
 
 #Below, check victory reasoning / winners
 #print(df_clean['victory_status'].value_counts()) Resign: 6450, Mate: 3462, OutOfTime: 1035, Draw: 564
@@ -64,4 +64,33 @@ df_clean['is_draw'] = df_clean['winner'] == 'draw'
 # plt.axhline(0, linestyle='--', color='gray')
 # plt.ylabel("White Rating - Black Rating")
 # plt.show()
+
+# Check chess openings by count, we want to see what openings lead to wins more often
+# print(df_clean['opening_name'].value_counts().head(10))
+
+opening_outcomes = df_clean.groupby(['opening_name', 'winner']).size().unstack(fill_value=0)
+opening_outcomes['total_games'] = opening_outcomes.sum(axis=1)
+
+# Add win rate columns
+opening_outcomes['white_win_rate'] = (opening_outcomes['white'] / opening_outcomes['total_games']) * 100
+opening_outcomes['black_win_rate'] = (opening_outcomes['black'] / opening_outcomes['total_games']) * 100
+opening_outcomes['draw_rate'] = (opening_outcomes['draw'] / opening_outcomes['total_games']) * 100
+
+top_openings = opening_outcomes.sort_values(by='total_games', ascending=False).head(10)
+print(top_openings[['white_win_rate', 'black_win_rate', 'draw_rate']])
+
+top_openings[['white_win_rate', 'black_win_rate', 'draw_rate']].plot(
+    kind='bar',
+    stacked=True,
+    figsize=(12, 6),
+    colormap='coolwarm'
+)
+
+plt.title("Win Rate by Opening (Top 10 Most Played)")
+plt.ylabel("Percentage")
+plt.xlabel("Opening Name")
+plt.xticks(rotation=45, ha='right')
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.show()
 
