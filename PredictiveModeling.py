@@ -124,3 +124,6 @@ plt.show()
 # Some cool ass data things to note, we slightly bettered our prediction of if white wins or not, from 65% to 67%. With rating and rating difference as our dominant features
 # within the model. Something interesting, the 'rated' flag, which was very influential in our linear model, did not seem to ave much effect at all in our random forest model,
 # meaning actual gameplay metrics seem to hold more value than if a player is rated or not.
+# Below is notes on grid search included, above is without.
+# After adding grid search to find the most optimized hyperparameters, we stay around the same accuracy (67%) however the precision/recall
+# is more balanced, meaning we have more stable prediction behavior.
