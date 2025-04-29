@@ -1,99 +1,96 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Load the data
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+# ------------------------------------------------------------
+#  LOAD & PREP DATA
+# ------------------------------------------------------------
+
 df_clean = pd.read_csv("games.csv")
-# Filter out instant games (duration = 0)
 df_clean['created_at'] = pd.to_datetime(df_clean['created_at'], unit='ms')
 df_clean['last_move_at'] = pd.to_datetime(df_clean['last_move_at'], unit='ms')
 df_clean['game_duration_sec'] = (df_clean['last_move_at'] - df_clean['created_at']).dt.total_seconds()
 df_clean = df_clean[df_clean['game_duration_sec'] > 0].copy()
 
+df_clean['is_white_win'] = df_clean['winner'] == 'white'
+df_clean['rating_diff'] = df_clean['white_rating'] - df_clean['black_rating']
+df_clean['rated'] = df_clean['rated'].astype(int)
+
+features = [
+    'white_rating',
+    'black_rating',
+    'rating_diff',
+    'turns',
+    'game_duration_sec',
+    'opening_ply',
+    'rated'
+]
+
+X = df_clean[features]
+y = df_clean['is_white_win']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
 # ------------------------------------------------------------
 #  LOGISTIC REGRESSION MODEL - Predicting if White will win
 # ------------------------------------------------------------
 
-# Create target variable and new features
-df_clean['is_white_win'] = df_clean['winner'] == 'white'
-df_clean['rating_diff'] = df_clean['white_rating'] - df_clean['black_rating']
-df_clean['rated'] = df_clean['rated'].astype(int)  # convert boolean to int
-# Select features (all numerical)
-features = [
-     'white_rating',
-     'black_rating',
-     'rating_diff',
-     'turns',
-     'game_duration_sec',
-     'opening_ply',
-     'rated'
-    ]
-X = df_clean[features]
-y = df_clean['is_white_win']
-# # Train/test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-# # Train logistic regression model
-# model = LogisticRegression(max_iter=1000)
-# model.fit(X_train, y_train)
-# # Predictions and evaluation
-# y_pred = model.predict(X_test)
-# print("Accuracy:", accuracy_score(y_test, y_pred))
-# print(classification_report(y_test, y_pred))
-# # Confusion matrix
-# sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
-# plt.xlabel("Predicted")
-# plt.ylabel("Actual")
-# plt.title("Confusion Matrix")
-# plt.show()
-# # Get and sort feature importance
-# coeffs = pd.Series(model.coef_[0], index=X.columns)
-# top_features = coeffs.abs().sort_values(ascending=True)  # smallest to largest for horizontal bar chart
-# # Plot
-# plt.figure(figsize=(8, 6))
-# top_features.plot(kind='barh', color='skyblue')
-# plt.title("Feature Importance (Logistic Regression Coefficients)")
-# plt.xlabel("Absolute Coefficient Value")
-# plt.ylabel("Feature")
-# plt.tight_layout()
-# plt.show()
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
 
-# Analysis from above Logistic Regression model, model predicts a white win correctly 65% of the time, tried feature importance to remove unnecessary features, removed
-# ones with little to no impact, model efficiency was reduced to being correct 52% of the time, relying way too much on the rating difference, added back in previously
-# removed features. Running model displays evaluation metrics (precision/recall/f1-score/support), confusion matrix, & feature importance bar chart.
+print("\n🔍 Logistic Regression Results")
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred))
 
-# ------------------------------------------------------
-#  RANDOM FOREST MODEL - Predicting if White will win
-# ------------------------------------------------------
+sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Logistic Regression Confusion Matrix")
+plt.show()
 
-# Set up parameter grid for tuning
+coeffs = pd.Series(model.coef_[0], index=X.columns)
+top_features = coeffs.abs().sort_values(ascending=True)
+
+plt.figure(figsize=(8, 6))
+top_features.plot(kind='barh', color='skyblue')
+plt.title("Logistic Regression Feature Importance")
+plt.xlabel("Absolute Coefficient Value")
+plt.ylabel("Feature")
+plt.tight_layout()
+plt.show()
+
+# Analysis:
+# Model predicts a white win correctly 65% of the time. Tried removing low-impact features using feature importance,
+# but performance dropped to 52%. Rating difference and player ratings are the most influential factors.
+
+# ------------------------------------------------------------
+#  RANDOM FOREST MODEL - Predicting if White will win (Grid Search Tuned)
+# ------------------------------------------------------------
+
 param_grid = {
     'n_estimators': [100, 200],
     'max_depth': [None, 10, 20],
     'min_samples_split': [2, 5]
 }
 
-# Use GridSearchCV to find best hyperparameters
 grid_search = GridSearchCV(
     estimator=RandomForestClassifier(random_state=42),
     param_grid=param_grid,
-    cv=5,  # 5-fold cross-validation
+    cv=5,
     scoring='accuracy',
-    n_jobs=-1  # Use all available cores
+    n_jobs=-1
 )
 
-# Fit grid search on training data
 grid_search.fit(X_train, y_train)
-
-# Grab the best model found during the search
 rf_model = grid_search.best_estimator_
-
-# Predict and evaluate
 rf_y_pred = rf_model.predict(X_test)
 
 print("\n🔍 Random Forest Results (with Grid Search)")
@@ -101,14 +98,12 @@ print("Best Parameters:", grid_search.best_params_)
 print("Accuracy:", accuracy_score(y_test, rf_y_pred))
 print(classification_report(y_test, rf_y_pred))
 
-# Confusion Matrix
 sns.heatmap(confusion_matrix(y_test, rf_y_pred), annot=True, fmt='d', cmap='Greens')
 plt.xlabel("Predicted")
 plt.ylabel("Actual")
 plt.title("Random Forest Confusion Matrix")
 plt.show()
 
-# Feature Importance Plot
 rf_importances = pd.Series(rf_model.feature_importances_, index=X.columns)
 rf_top_features = rf_importances.sort_values(ascending=True)
 
@@ -120,10 +115,49 @@ plt.ylabel("Feature")
 plt.tight_layout()
 plt.show()
 
+# Analysis:
+# Slight improvement from 65% to 67% accuracy. Rating and rating difference dominate.
+# Interestingly, 'rated' had strong influence in logistic regression but almost none in random forest.
+# Grid search improved balance in precision and recall without sacrificing performance.
 
-# Some cool ass data things to note, we slightly bettered our prediction of if white wins or not, from 65% to 67%. With rating and rating difference as our dominant features
-# within the model. Something interesting, the 'rated' flag, which was very influential in our linear model, did not seem to ave much effect at all in our random forest model,
-# meaning actual gameplay metrics seem to hold more value than if a player is rated or not.
-# Below is notes on grid search included, above is without.
-# After adding grid search to find the most optimized hyperparameters, we stay around the same accuracy (67%) however the precision/recall
-# is more balanced, meaning we have more stable prediction behavior.
+# ------------------------------------------------------------
+#  K-NEAREST NEIGHBORS MODEL - Predicting if White will win (Grid Search Tuned)
+# ------------------------------------------------------------
+
+# Scale features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+knn_param_grid = {
+    'n_neighbors': list(range(1, 21)),
+    'weights': ['uniform', 'distance'],
+    'metric': ['euclidean', 'manhattan']
+}
+
+grid_knn = GridSearchCV(
+    KNeighborsClassifier(),
+    param_grid=knn_param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1
+)
+
+grid_knn.fit(X_train_scaled, y_train)
+best_knn = grid_knn.best_estimator_
+knn_preds = best_knn.predict(X_test_scaled)
+
+print("\n🔍 K-Nearest Neighbors Results (Grid Search Tuned)")
+print("Best Parameters:", grid_knn.best_params_)
+print("Accuracy:", accuracy_score(y_test, knn_preds))
+print(classification_report(y_test, knn_preds))
+
+sns.heatmap(confusion_matrix(y_test, knn_preds), annot=True, fmt='d', cmap='Purples')
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("KNN Confusion Matrix (Tuned)")
+plt.show()
+
+# Analysis:
+# KNN accuracy improved from 60% to ~64% after tuning k, weights, and distance metric.
+# Still less effective than Random Forest or Logistic Regression, but performs more consistently after tuning.
